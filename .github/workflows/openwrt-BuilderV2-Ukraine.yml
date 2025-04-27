@@ -25,7 +25,6 @@ jobs:
         run: |
             cd openwrt
             cp ../.config .config
-            make defconfig
 
       - name: Обновнення файлів....
         run: |
