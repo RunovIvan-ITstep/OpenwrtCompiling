@@ -6,8 +6,14 @@ on:
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
+  FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: .config
-  TZ: Asia/Shanghai
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  TZ: Europe/Kyiv
+  UPLOAD_BIN_DIR: false
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: false
 
 jobs:
   build:
@@ -17,30 +23,52 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4.2.2
 
-    - name: Install Dependencies
+    - name: Prepare environment
       run: |
-        sudo apt update
-        sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib gperf libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget
+        sudo apt-get update
+        sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget
 
-    - name: Clone OpenWrt Source
+    - name: Clone source code
       run: |
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        cd openwrt
+        mkdir -p /workdir
+        cd /workdir
+        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+
+    - name: Load custom feeds
+      run: |
+        [ -e $FEEDS_CONF ] && cp $FEEDS_CONF /workdir/openwrt/feeds.conf.default
+        chmod +x $DIY_P1_SH || true
+        cd /workdir/openwrt
+        [ -e "$GITHUB_WORKSPACE/$DIY_P1_SH" ] && $GITHUB_WORKSPACE/$DIY_P1_SH
+
+    - name: Update and install feeds
+      run: |
+        cd /workdir/openwrt
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Copy Config
+    - name: Load custom configuration
       run: |
-        cp $CONFIG_FILE openwrt/.config
+        [ -e files ] && cp -r files /workdir/openwrt/files
+        [ -e $CONFIG_FILE ] && cp $CONFIG_FILE /workdir/openwrt/.config
+        chmod +x $DIY_P2_SH || true
+        cd /workdir/openwrt
+        [ -e "$GITHUB_WORKSPACE/$DIY_P2_SH" ] && $GITHUB_WORKSPACE/$DIY_P2_SH
+
+    - name: Make download
+      run: |
+        cd /workdir/openwrt
+        make defconfig
+        make download -j8 || true
 
     - name: Build OpenWrt
       run: |
-        cd openwrt
-        make defconfig
-        make -j$(nproc)
+        cd /workdir/openwrt
+        make -j8 V=s
 
-    - name: Upload Firmware
+    - name: Upload firmware
+      if: env.UPLOAD_FIRMWARE == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: OpenWrt-firmware
-        path: openwrt/bin/targets/
+        name: OpenWrt_firmware
+        path: /workdir/openwrt/bin/targets/
