@@ -1,10 +1,6 @@
 # https://github.com/P3TERX/Actions-OpenWrt
-#
-# File: .github/workflows/openwrt-builder.yml
-# Description: Build OpenWrt using GitHub Actions
-#
 
-name: OpenWrt Builder V2
+name: OpenWrt Builder
 
 on:
   repository_dispatch:
@@ -144,9 +140,9 @@ jobs:
         keep_minimum_runs: 2
 
     - name: Remove old Releases
-      uses: johnbeynon/delete-old-releases@v1
+      uses: namoscato/delete-old-releases@v2
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
-        delete_tags: true
-        releases_to_keep: 3
+        delete_tag_pattern: '*'
+        min_releases: 3
         token: ${{ secrets.GITHUB_TOKEN }}
