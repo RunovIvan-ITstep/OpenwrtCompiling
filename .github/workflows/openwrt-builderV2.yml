@@ -1,6 +1,4 @@
-# https://github.com/P3TERX/Actions-OpenWrt
-
-name: OpenWrt Builder
+name: OpenWrt Builder V2
 
 on:
   repository_dispatch:
@@ -44,7 +42,7 @@ jobs:
       working-directory: /workdir
       run: |
         df -hT $PWD
-        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
     - name: Load custom feeds
@@ -67,19 +65,13 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
-        # Remove PPPoE and unnecessary packages
-        sed -i '/pppoe/d' .config
-        sed -i '/ppp-mod-pppoe/d' .config
-        sed -i '/ppp/d' .config
-        echo -e "\nCONFIG_SIGNED_PACKAGES=n" >> .config
-        echo -e "\nCONFIG_SIGNATURE_CHECK=n" >> .config
-        make defconfig
 
     - name: Download package
       id: package
       run: |
         cd openwrt
-        make download -j8
+        make defconfig
+        make download -j$(nproc)
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
@@ -88,7 +80,7 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 V=s
+        make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
@@ -127,11 +119,10 @@ jobs:
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
-        echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to release
       uses: softprops/action-gh-release@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled()
+      if: steps.tag.outputs.release_tag != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -147,7 +138,6 @@ jobs:
 
     - name: Remove old Releases
       uses: dev-drprasad/delete-older-releases@v1
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
         keep_latest: 3
         delete_tags: true
