@@ -1,0 +1,47 @@
+name: OpenWrt Compile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Налаштування Сервера
+        run: |
+          echo "REPO_URL=https://github.com/coolsnowwolf/lede" >> $GITHUB_ENV
+          echo "REPO_BRANCH=master" >> $GITHUB_ENV
+
+      - name: Качаю Openwrt для компіляцію
+        run: |
+          mkdir -p openwrt
+          cd openwrt
+          git clone --depth=1 $REPO_URL -b $REPO_BRANCH source
+
+      - name: Завантажую .config для компіляції вашого роунтера
+        run: |
+            cd openwrt
+            cp ../.config .config
+            make defconfig
+
+      - name: Обновнення файлів....
+        run: |
+          cd openwrt/source
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Будую систему....
+        run: |
+          cd openwrt/source
+          make defconfig
+          make -j$(nproc)
+
+      - name: Вигружаю прошивку з сервера....
+        if: success()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: OpenWrt_firmware
+          path: openwrt/source/bin/targets/
